@@ -1,0 +1,102 @@
+# https://doc.ec-cube.net/plugin_test#%E7%B6%99%E7%B6%9A%E7%9A%84%E3%82%A4%E3%83%B3%E3%83%86%E3%82%B0%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%9F%E8%A4%87%E6%95%B0%E7%92%B0%E5%A2%83%E3%81%A7%E3%81%AE%E3%83%86%E3%82%B9%E3%83%88
+language: php
+
+sudo: required
+
+cache:
+  directories:
+    - vendor
+    - $HOME/.composer/cache
+    - bin/.phpunit
+
+php:
+  - 7.1
+  - 7.2
+  - 7.3
+
+env:
+  global:
+    PLUGIN_CODE=DynaShow
+
+  matrix:
+    - ECCUBE_VERSION=4.0.3 DATABASE_URL=mysql://root:@localhost/ec4alpha DATABASE_SERVER_VERSION=5
+    - ECCUBE_VERSION=4.0.3 DATABASE_URL=postgres://postgres:password@localhost/cube4_dev DATABASE_SERVER_VERSION=9
+
+
+#  プラグインをパッケージング(tarでアーカイブ)
+#  ec-cube本体をclone
+#  envで指定したec-cube本体のバージョンにcheckout
+#  ec-cube本体のインストール
+#  プラグインのインストール
+#before_script:
+
+before_install: &php_setup |
+  phpenv config-rm xdebug.ini || true
+  echo "opcache.enable_cli=1" >> ~/.phpenv/versions/$(phpenv version-name)/etc/conf.d/travis.ini
+  echo "apc.enable_cli=1" >> ~/.phpenv/versions/$(phpenv version-name)/etc/conf.d/travis.ini
+  echo "memory_limit=-1" >> ~/.phpenv/versions/$(phpenv version-name)/etc/conf.d/travis.ini
+
+install_eccube: &install_eccube |
+  tar cvzf ${HOME}/${PLUGIN_CODE}.tar.gz ./*
+  git clone https://github.com/EC-CUBE/ec-cube.git
+  cd ec-cube
+  sh -c "if [ '${ECCUBE_VERSION}' = '4.0' ];   then git checkout origin/${ECCUBE_VERSION}; fi"
+  sh -c "if [ ! '${ECCUBE_VERSION}' = '4.0' ]; then git checkout refs/tags/${ECCUBE_VERSION}; fi"
+  composer selfupdate
+  composer install --dev --no-interaction -o --apcu-autoloader
+
+eccube_setup: &eccube_setup |
+  echo "APP_ENV=test" > .env
+  bin/console doctrine:database:create
+  bin/console doctrine:schema:create
+  bin/console eccube:fixtures:load
+  bin/console eccube:plugin:install --path=${HOME}/${PLUGIN_CODE}.tar.gz
+  bin/console eccube:plugin:enable --code=${PLUGIN_CODE}
+
+install:
+  - *install_eccube
+  - *eccube_setup
+
+script:
+  # UnitTsetを実行する
+  -  ./vendor/bin/phpunit app/Plugin/${PLUGIN_CODE}/Tests;
+
+after_script:
+  # プラグインを無効化する
+  - bin/console eccube:plugin:disable --code=${PLUGIN_CODE}
+  # プラグインをアンインストールする
+  - bin/console eccube:plugin:uninstall --code=${PLUGIN_CODE}
+  # プラグインを再インストールする
+  - bin/console eccube:plugin:install --code=${PLUGIN_CODE}
+  # プラグインを有効化する
+  - bin/console eccube:plugin:enable --code=${PLUGIN_CODE}
+
+jobs:
+  fast_finish: true
+  include:
+    - stage: Inspection
+      php: 7.3
+      env: DATABASE_URL=postgres://postgres:password@localhost/cube4_dev DATABASE_SERVER_VERSION=9
+      install:
+        - *install_eccube
+        - *eccube_setup
+      script: vendor/bin/php-cs-fixer fix --config=.php_cs.dist --dry-run app/Plugin/${PLUGIN_CODE}
+    - &coverage
+      stage: Code Coverage
+      env: DATABASE_URL=postgres://postgres:password@localhost/cube4_dev DATABASE_SERVER_VERSION=9 COVERAGE=1
+      before_install:
+        - *php_setup
+        - gem install mime-types -v 2.99.1
+        - gem install mailcatcher
+      install:
+        - *install_eccube
+        - *eccube_setup
+        # mail catcher
+        - mailcatcher
+      script:
+        - phpdbg -qrr ./vendor/bin/phpunit -c app/Plugin/${PLUGIN_CODE}/phpunit.xml.dist --coverage-clover=coverage.clover
+      after_success:
+        - php vendor/bin/php-coveralls -v -x coverage.clover
+
+
+

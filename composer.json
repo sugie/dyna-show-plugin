@@ -1,0 +1,12 @@
+{
+  "name": "ec-cube/DynaShow",
+  "version": "1.0.0",
+  "description": "DynaShow",
+  "type": "eccube-plugin",
+  "require": {
+    "ec-cube/plugin-installer": "~0.0.7"
+  },
+  "extra": {
+    "code": "DynaShow"
+  }
+}

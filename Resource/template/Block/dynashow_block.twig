@@ -1,0 +1,83 @@
+<div class="container pt-4">
+    <div class="row mb-4">
+        <div class="col col-sm-12" style="">
+            <div style="float: left;">
+                <label>
+                    表示数: &nbsp;
+                    <select id="ds-limit" class="ec-select">
+                        <option>10</option>
+                        <option>20</option>
+                        <option>40</option>
+                        <option>60</option>
+                    </select>
+                </label>
+            </div>
+            <input id='ds-keyword' style="margin-left:12px; padding-left: 8px; width: 240px; float: left;"
+                   class="form-control ec-input"
+                   placeholder="キーワード" type="text">
+
+            <div class="ec-select">
+                <select style="float: right;;" id="ds-orderby" name="orderby" class="order-by form-control">
+                    <option value="1">価格が低い順</option>
+                    <option value="3">価格が高い順</option>
+                    <option value="4">新着順</option>
+                </select>
+            </div>
+
+        </div>
+    </div>
+
+    <style>
+        .dyna-cell {
+            width: 240px;
+            float: left;
+            border: solid 1px darkgrey;
+            text-align: center;
+            padding: 4px;
+            margin: 4px;
+        }
+    </style>
+    <script>
+        var dsApp = {};
+        $(function () {
+
+            $('#ds-keyword').keyup(function (e) {
+                console.log(e.keyCode)
+                dsApp.load();
+            });
+
+            dsApp.load = function () {
+                console.log('dsApp.load()');
+                $.ajax({
+                    url: '/dynashow/page/1',
+                    method: 'POST',
+                    data: {
+                        name: $('#ds-keyword').val(),
+                        orderby: $('#ds-orderby').val(),
+                        limit: $('#ds-limit').val(),
+                    },
+                }).done(function (data, textStatus, jqXHR) {
+                    $('#show-box').html(data);
+                }).always(function () {
+                });
+            };
+
+            $('#ds-orderby').change(function (e) {
+                var val = $('#ds-orderby').val();
+                console.log('change:' + val);
+                dsApp.load();
+            });
+
+            $('#ds-limit').change(function() {
+                dsApp.load();
+            })
+
+            dsApp.load();
+
+        })();
+    </script>
+    <div class="ec-shelfRole">
+        <ul id="show-box" class="ec-shelfGrid">
+        </ul>
+    </div>
+</div>
